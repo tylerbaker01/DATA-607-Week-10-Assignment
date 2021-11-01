@@ -1,0 +1,178 @@
+---
+title: "Week10 Assignment"
+author: "Tyler Baker"
+date: "10/31/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(gutenbergr)
+library(tidyverse)
+library(tidytext)
+library(textdata)
+```
+
+## Week 10 Assignment
+#Text mining and natural language processing
+
+The goals of this week's assignment are as follows:
+1. get primary example code from chapter 2 of "Text Mining with R: A Tidy Approach" by Julia Silge and David Robinson.
+2. Work with a different corpus. For this, I chose to work with a collection of works by my favorite author, Kurt Vonnegut Jr. I used the gutenberg project to populate the data.
+3. Incorporate at least one additional sentiment lexicon.
+4. Find most frequent words.
+5. Find most important words.
+6. Publish to RPubs and Github.
+Post links to BB.
+
+#Import Data
+```{r}
+kurt <- gutenberg_works(author == "Vonnegut, Kurt")
+kurt_works <- gutenberg_download(c(21279, 30240))
+```
+Unfortunately, there are only two books by Kurt Vonnegut Jr. in Project Gutenberg.
+
+#Tidy the Data
+```{r}
+tidy_kurt <- kurt_works %>%
+  unnest_tokens(word, text)%>%
+  anti_join(stop_words)
+```
+
+#Most Frequent Words
+```{r}
+kurt_frequency <- tidy_kurt %>%
+  count(word)
+```
+
+#Plot Frequencies
+```{r}
+kurt_top_words <- kurt_frequency %>%
+  filter(n > 14)
+
+ggplot(kurt_top_words, aes(x = word, y = n)) + 
+  geom_col()
+```
+
+As we can see the most used words are gramps and lou, which are likely to be character names.
+
+#Get Sentinents
+```{r}
+get_sentiments("afinn")
+get_sentiments("bing")
+get_sentiments("nrc")
+```
+
+```{r}
+nrc_joy <- get_sentiments("nrc") %>%
+  filter(sentiment == "joy")
+```
+Here I filtered out all of the words related to positive feelings from the nrc lexicon.
+
+Next, I need to find the joyful words in Kurt Vonnegut works.
+
+#nrc joy
+Here we take all of the words that are related to joy from Vonnegut works.
+```{r}
+nrc_joy_kurt <- tidy_kurt %>%
+  inner_join(nrc_joy) %>%
+  count(word, sort = TRUE)
+```
+As you can see the "jouful" word that is used the most is "happy".
+
+#affrin joy
+This will pull out the words from Vonnegut works that afrinn relate as positive.
+```{r}
+affin_joy <- get_sentiments("afinn") %>%
+  filter(value > 0)
+
+kurt_afinn_joy <- tidy_kurt %>%
+  inner_join(affin_joy) %>%
+  count(word, sort = TRUE)
+```
+
+#Bing joy
+Here we find positive Vonnegut words using the lexicon Bing.
+```{r}
+bing_joy <- get_sentiments("bing")%>%
+  filter(sentiment == "positive")
+
+kurt_bing_joy <- tidy_kurt %>%
+  inner_join(bing_joy) %>%
+  count(word, sort = TRUE)
+```
+#Loughran Joy
+Here we will use a lexicon not used in the examples of in the book.
+```{r}
+
+loughran_joy <- get_sentiments("loughran")%>%
+  filter(sentiment == "positive")
+
+kurt_loughran_joy <- tidy_kurt %>%
+  inner_join(loughran_joy)%>%
+  count(word, sort = TRUE)
+```
+
+
+#Graphing the top words
+This is great way to compare how the sentiments work 
+```{r}
+graph_kurt_afinn<- kurt_afinn_joy %>%
+  filter(n >3)
+graph_kurt_bing <- kurt_bing_joy %>%
+  filter(n >3)
+graph_kurt_loughran <- kurt_loughran_joy %>%
+  filter(n >3)
+graph_kurt_nrc <- nrc_joy_kurt %>%
+  filter(n >3)
+```
+
+
+```{r}
+ggplot() +
+  geom_point(data = graph_kurt_afinn, aes(x = word, y = n), color = "red") +
+  geom_point(data = graph_kurt_bing, aes(x = word, y = n), color = "blue") +
+  geom_point(data = graph_kurt_loughran, aes(x = word, y = n), color = "green") +
+  geom_point(data = graph_kurt_nrc, aes(x = word, y = n), color = "yellow")
+```
+
+#Which Lexicon to use?
+Well, it definitely seems like a matter of preference. I personally want to see more words being marked. Thus, I would prefer nrc. It simply had more words.
+
+#Which words are most important?
+To find which words are the most important we use the tf_idf.
+```{r}
+colnames(tidy_kurt) <- c("book", "word")
+tidy_kurt$book <- tidy_kurt$book %>%
+  str_replace_all(c("21279" = "2 b r 0 2 b", "30240" = "the big trip up yonder"))
+```
+
+#now to pull out word frequencies per book
+```{r}
+book_words <- tidy_kurt %>%
+  count(book, word, sort = TRUE)
+
+total_words <- book_words %>%
+  group_by(book) %>%
+  summarize(total = sum(n))
+
+book_words <- left_join(book_words, total_words)
+```
+```{r}
+freq_by_rank <- book_words %>%
+  group_by(book) %>%
+  mutate(rank = row_number(),
+         `term frequency` = n/total)%>%
+  ungroup()
+freq_by_rank
+```
+```{r}
+book_tf_idf <- book_words %>%
+  bind_tf_idf(word, book, n)
+book_tf_idf %>%
+  arrange(desc(tf_idf))
+```
+#Conclusions
+
+In conclusion, the same words that are most used happen to also be considered to be the most important words. I wonder how this would change if Project Gutenberg had more of Kurt vonnegut's books. I imagine that the characters wouldn't be the top words in regards to frequency or importance. 
+
